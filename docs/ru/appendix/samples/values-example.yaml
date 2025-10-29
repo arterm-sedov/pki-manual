@@ -1,0 +1,222 @@
+# Пример файла values для Helm чарта acmistio
+# Используйте этот файл как основу для создания собственной конфигурации
+
+# Настройки ACM (Authority Certificate Manager)
+acm:
+  # Корневой сертификат в формате PEM
+  # При установке используйте: --set acm.caroot="$(cat ~/Root_CA.pem)"
+  caroot: |
+    -----BEGIN CERTIFICATE-----
+    # Содержимое вашего корневого сертификата
+    # Будет подставлено при установке
+    -----END CERTIFICATE-----
+  
+  # Список серверов конфигурации
+  # Формат: список URL в фигурных скобках
+  configServers:
+    - https://acm-server-1.example.com/api/acmcd
+    - https://acm-server-2.example.com/api/acmcd
+  
+  # Таймаут подключения к серверам (в секундах)
+  connectionTimeout: 30
+  
+  # Количество попыток подключения
+  retryCount: 3
+
+# Настройки кластера
+cluster:
+  # Имя кластера - используется для идентификации
+  name: my-k8s-cluster
+  
+  # Окружение: DEV, TEST, PROD
+  # Влияет на уровень логирования и некоторые политики безопасности
+  enviroment: PROD
+
+# Настройки Docker образа
+image:
+  # Registry URL (если отличается от Docker Hub)
+  registry: registry.example.com
+  
+  # Имя репозитория
+  repository: acmistio/operator
+  
+  # Версия приложения (она же тег образа)
+  appVersion: 2023.2.1
+  
+  # Политика загрузки образов
+  pullPolicy: IfNotPresent
+  
+  # Секрет для доступа к registry
+  # Создается отдельно командой kubectl create secret
+  pullSecrets:
+    - name: registry-secret
+
+# Настройки ресурсов
+resources:
+  # Лимиты
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  # Запросы
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Настройки репликации
+replicaCount: 2
+
+# Настройки affinity для высокой доступности
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app
+            operator: In
+            values:
+            - acmistio
+        topologyKey: kubernetes.io/hostname
+
+# Настройки Service
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+
+# Настройки ServiceAccount
+serviceAccount:
+  # Создавать ли ServiceAccount
+  create: true
+  # Имя ServiceAccount
+  name: acmistio-operator
+  # Аннотации для ServiceAccount
+  annotations: {}
+
+# Настройки RBAC
+rbac:
+  # Создавать ли RBAC ресурсы
+  create: true
+
+# Настройки безопасности
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  capabilities:
+    drop:
+    - ALL
+
+# Настройки pod security
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+# Метки для всех ресурсов
+labels:
+  app: acmistio
+  version: v1
+  managed-by: helm
+
+# Аннотации для подов
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "9090"
+  prometheus.io/path: "/metrics"
+
+# Настройки логирования
+logging:
+  # Уровень логирования: debug, info, warn, error
+  level: info
+  # Формат логов: json, text
+  format: json
+
+# Настройки мониторинга
+monitoring:
+  # Включить ли ServiceMonitor для Prometheus Operator
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    path: /metrics
+
+# Настройки Istio интеграции
+istio:
+  # Namespace где установлен Istio
+  namespace: istio-system
+  # Имя секрета для istiod
+  secretName: istiod-tls
+  # Автоматическая ротация сертификатов
+  autoRotate: true
+  # Период ротации в днях
+  rotationPeriod: 30
+
+# Дополнительные переменные окружения
+extraEnvVars: []
+# - name: CUSTOM_VAR
+#   value: "custom-value"
+
+# Дополнительные volume mounts
+extraVolumeMounts: []
+# - name: custom-config
+#   mountPath: /etc/custom
+#   readOnly: true
+
+# Дополнительные volumes
+extraVolumes: []
+# - name: custom-config
+#   configMap:
+#     name: custom-config
+
+# Node selector
+nodeSelector: {}
+# nodeSelector:
+#   disktype: ssd
+
+# Tolerations
+tolerations: []
+# - key: "key1"
+#   operator: "Equal"
+#   value: "value1"
+#   effect: "NoSchedule"
+
+# Настройки обновления
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+# Настройки проверок
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8080
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Настройки PodDisruptionBudget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Настройки NetworkPolicy
+networkPolicy:
+  enabled: false
+  ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            name: istio-system

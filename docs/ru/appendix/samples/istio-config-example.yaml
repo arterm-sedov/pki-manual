@@ -1,0 +1,129 @@
+# Пример конфигурации для замены встроенной Istio Citadel
+# Файл основан на ./config/samples/istio-config-1.12.2.yaml
+#
+# ВАЖНО: Данный пример написан для Istio 1.12.2
+# Для других версий Istio конфигурация может отличаться
+
+# Patch для IstioOperator чтобы отключить встроенную Citadel
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: istio-control-plane
+  namespace: istio-system
+spec:
+  # Отключаем встроенный компонент безопасности
+  components:
+    pilot:
+      k8s:
+        env:
+          # Указываем использовать внешний CA
+          - name: EXTERNAL_CA
+            value: "true"
+          # Путь к корневому сертификату
+          - name: ROOT_CA_DIR
+            value: "/etc/cacerts"
+        # Монтируем секрет с сертификатами
+        overlays:
+          - apiVersion: apps/v1
+            kind: Deployment
+            name: istiod
+            patches:
+              - path: spec.template.spec.containers.[name:discovery].volumeMounts
+                value:
+                  - name: cacerts
+                    mountPath: /etc/cacerts
+                    readOnly: true
+              - path: spec.template.spec.volumes
+                value:
+                  - name: cacerts
+                    secret:
+                      secretName: istiod-tls
+                      optional: false
+
+  # Глобальные настройки mesh
+  meshConfig:
+    defaultConfig:
+      # Настройки прокси для работы с кастомным CA
+      proxyStatsMatcher:
+        inclusionRegexps:
+        - ".*outlier_detection.*"
+        - ".*osconfig.*"
+        - ".*rbac.*"
+    
+    # Настройки доверия сертификатам
+    trustDomain: cluster.local
+    trustDomainAliases: []
+
+  values:
+    # Отключаем генерацию сертификатов Citadel
+    security:
+      createRemoteSvcEndpoints: false
+    
+    pilot:
+      # Настройки для istiod
+      env:
+        # Отключаем встроенный CA
+        PILOT_ENABLE_WORKLOAD_ENTRY_AUTOREGISTRATION: false
+        PILOT_ENABLE_WORKLOAD_ENTRY_HEALTHCHECKS: false
+
+---
+# ConfigMap с дополнительными настройками mesh
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: istio-ca-root
+  namespace: istio-system
+data:
+  # Корневой сертификат для валидации
+  # Будет заполнен оператором acmistio
+  root-cert.pem: |
+    # ROOT CERTIFICATE CONTENT
+    # This will be populated by acmistio operator
+
+---
+# Service Account для компонентов Istio
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: istio-pilot-service-account
+  namespace: istio-system
+  labels:
+    app: istiod
+    release: istio
+
+---
+# ClusterRole для доступа к секретам
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: istio-pilot-istio-system
+  labels:
+    app: istiod
+    release: istio
+rules:
+  # Права на чтение секретов с сертификатами
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "watch", "list"]
+  # Права на управление endpoints
+  - apiGroups: [""]
+    resources: ["endpoints", "pods", "services", "nodes"]
+    verbs: ["get", "watch", "list"]
+
+---
+# ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: istio-pilot-istio-system
+  labels:
+    app: istiod
+    release: istio
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: istio-pilot-istio-system
+subjects:
+  - kind: ServiceAccount
+    name: istio-pilot-service-account
+    namespace: istio-system

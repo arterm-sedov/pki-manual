@@ -1,0 +1,58 @@
+# Пример конфигурации для автоматического выпуска сертификата istiod
+# Файл основан на ./config/samples/istiod-autocert.yaml
+# 
+# ВАЖНО: Данный файл является примером. Актуальную версию необходимо
+# получить из репозитория оператора и адаптировать под ваши требования.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: istiod-autocert-config
+  namespace: istio-system
+data:
+  # Конфигурация для автоматического выпуска сертификата
+  # Замените значения на актуальные для вашего окружения
+  cert-config.yaml: |
+    # Имя сертификата
+    certName: istiod
+    # Namespace где будет создан секрет
+    secretNamespace: istio-system
+    # Имя секрета
+    secretName: istiod-tls
+    # DNS имена для сертификата
+    dnsNames:
+      - istiod.istio-system.svc
+      - istiod.istio-system.svc.cluster.local
+    # Срок действия сертификата (в днях)
+    validity: 365
+    # Автоматическое обновление
+    autoRenew: true
+    # За сколько дней до истечения начать обновление
+    renewBefore: 30
+
+---
+# Custom Resource для запроса сертификата
+# Точный формат зависит от используемого оператора
+apiVersion: acm.example.com/v1
+kind: CertificateRequest
+metadata:
+  name: istiod-tls-request
+  namespace: istio-system
+spec:
+  # Ссылка на конфигурацию
+  configMapRef:
+    name: istiod-autocert-config
+    namespace: istio-system
+  # Тип сертификата
+  certificateType: server
+  # Дополнительные параметры
+  issuerRef:
+    name: acm-issuer
+    kind: ClusterIssuer
+  # Алгоритм ключа
+  keyAlgorithm: RSA
+  keySize: 2048
+  # Метки для отслеживания
+  labels:
+    app: istiod
+    managed-by: acmistio-operator
