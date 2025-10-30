@@ -2,9 +2,7 @@
 
 Здесь представлены инструкции по установке и настройке оператора `itcacmistio` для интеграции с **Istio service mesh** в кластере **Kubernetes**.
 
-**Результат**: оператор `itcacmistio`, который заменит стандартную **Istio Citadel** на особую реализацию для выпуска и ротации сертификатов.
-
-В этом руководстве устанавливается оператор itcacmistio, который интегрируется с Istio и берёт на себя выпуск и ротацию сертификатов вместо стандартной Citadel. Подробнее об операторах: [Kubernetes Operators — что это и примеры](https://www.cncf.io/blog/2022/06/15/kubernetes-operators-what-are-they-some-examples/).
+**Результат**: установлен оператор `itcacmistio`, который интегрирован с **Istio**, заменяет стандартную **Istio Citadel** и берёт на себя выпуск и ротацию сертификатов вместо стандартной Citadel.
 
 Подробные сведения о работе с операторами, Kubernetes и Istio см. в [справочных материалах](#справочные-материалы).
 
@@ -16,21 +14,21 @@
 
     См. также статью _«[Operator в Kubernetes что это и зачем нужен](https://purpleschool.ru/knowledge-base/article/kubernetes-operator/)»_.
 
-## Предусловия
+## Предварительные условия
 
 Перед началом установки убедитесь, что выполнены следующие условия:
 
-- Развёрнут кластер Kubernetes версии 1.19+
-- У вас имеется административный доступ
-- Установлена утилита `kubectl`
-- Установлено ПО Helm версии 3.x
-- Развёрнута сеть Istio
-- Имеется доступ к реестру контейнеров с образом оператора
-- Имеется файл корневого сертификата (Root_CA.pem)
+- развёрнут кластер Kubernetes версии 1.19+;
+- у вас имеется административный доступ;
+- установлена утилита `kubectl`;
+- установлено ПО Helm версии 3.x;
+- развёрнута сеть Istio;
+- имеется доступ к реестру контейнеров с образом оператора;
+- имеется файл корневого сертификата (`Root_CA.pem`).
 
 ## Пошаговая установка
 
-1. Создайте namespace для оператора:
+1. Создайте пространство имён для оператора:
 
     ```bash
     kubectl create namespace itcacm-citadel-system
@@ -46,6 +44,8 @@
     --docker-password=<PASSWORD>
     ```
 
+    Вместо `<REGISTRY_URL>`, `<USERNAME>`, `<PASSWORD>` укажите фактические данные для доступа к Docker.
+
 3. Установите оператор с необходимыми параметрами посредством Helm
 
     ```bash
@@ -60,46 +60,46 @@
     ```
 
     **Параметры команды:**
-    - `acm.caroot` - содержимое корневого сертификата
-    - `cluster.name` - имя вашего кластера
-    - `cluster.enviroment` - окружение (DEV|TEST|PROD)
-    - `acm.configServers` - список серверов конфигурации
-    - `image.appVersion` - версия образа оператора
+    
+    - `acm.caroot` - содержимое корневого сертификата;
+    - `cluster.name` - имя вашего кластера;
+    - `cluster.enviroment` - окружение (`DEV`|`TEST`|`PROD`);
+    - `acm.configServers` - список серверов конфигурации;
+    - `image.appVersion` - версия образа оператора.
 
-4. С помощью файла конфигурации автоматически выпустите сертификат в istiod-tls:
+4. С помощью YAML-файла конфигурации автоматически выпустите сертификат в `istiod-tls`:
 
     ```bash
     kubectl apply -f ./config/samples/istiod-autocert.yaml -n istio-system
     ```
 
-5. Замените стандартную Istio Citadel. Отключите встроенную Citadel и активируйте особую:
+5. Замените стандартную Istio Citadel. Для этого отключите встроенную Citadel и активируйте собственную на основе YAML-файла конфигурации:
 
     ```bash
     kubectl apply -f ./config/samples/istio-config-1.12.2.yaml
     ```
 
-### Шаг 6: Проверка успешности установки
+6. Проверьте статус оператора:
 
-Проверьте статус оператора:
+    ```bash
+    # Проверка подов оператора
+    kubectl get pods -n itcacm-citadel-system
 
-```bash
-# Проверка подов оператора
-kubectl get pods -n itcacm-citadel-system
+    # Проверка наличия секрета istiod-tls
+    kubectl get secret istiod-tls -n istio-system
 
-# Проверка наличия секрета istiod-tls
-kubectl get secret istiod-tls -n istio-system
+    # Проверка логов оператора
+    kubectl logs -n itcacm-citadel-system -l app=acmistio
+    ```
 
-# Проверка логов оператора
-kubectl logs -n itcacm-citadel-system -l app=acmistio
-```
-
-Все поды должны быть в статусе `Running`, секрет `istiod-tls` должен быть создан.
+    - Все поды должны быть иметь статус `Running`.
+    - Секрет `istiod-tls` должен быть создан.
 
 ## Решение типовых проблем
 
 ### Как обновить оператор до новой версии
 
-Для обновления выполните команду установки с новыми параметрами:
+Выполните команду установки с новыми параметрами:
 
 ```bash
 helm upgrade acmistio ./chart \
@@ -110,7 +110,7 @@ helm upgrade acmistio ./chart \
 
 ### Как откатить неудачное обновление
 
-Для отката к предыдущей версии:
+Для отката к предыдущей версии выполните команду:
 
 ```bash
 # Посмотреть историю релизов
@@ -120,9 +120,9 @@ helm history acmistio -n itcacm-citadel-system
 helm rollback acmistio -n itcacm-citadel-system
 ```
 
-### Как проверить логи при ошибках
+### Как проверить журналы при ошибках
 
-При возникновении проблем проверьте:
+При возникновении проблем выполните следующие команды:
 
 ```bash
 # Логи оператора
@@ -137,7 +137,7 @@ helm status acmistio -n itcacm-citadel-system
 
 ### Как обновить сертификаты
 
-Для обновления корневого сертификата:
+Для обновления корневого сертификата выполните команду:
 
 ```bash
 helm upgrade acmistio ./chart \
@@ -148,12 +148,13 @@ helm upgrade acmistio ./chart \
 
 ## Справочные материалы
 
+Чтобы подробнее изучить работу операторов в Kubernetes, ознакомьтесь со следующими материалами.
+
 - [Operator в Kubernetes что это и зачем нужен](https://purpleschool.ru/knowledge-base/article/kubernetes-operator/)
 - [Архитектура Kubernetes](https://kubernetes.io/docs/concepts/architecture/)
 - [Pods в Kubernetes](https://kubernetes.io/docs/concepts/workloads/pods/)
-- [Namespaces](https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/)
+- [Секреты в Kubernetes](https://kubernetes.io/docs/concepts/configuration/secret/)
+- [Пространства имён в Kubernetes](https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/)
 - [Helm Charts](https://helm.sh/docs/topics/charts/)
-- [Kubernetes Operators](https://www.cncf.io/blog/2022/06/15/kubernetes-operators-what-are-they-some-examples/)
 - [Istio: Подмена встроенного CA (plugin CA cert)](https://istio.io/latest/docs/tasks/security/cert-management/plugin-ca-cert/)
 - [Istio: Концепции безопасности](https://istio.io/latest/docs/concepts/security/)
-- [Kubernetes: Secrets](https://kubernetes.io/docs/concepts/configuration/secret/)
