@@ -143,7 +143,10 @@ helm upgrade acmistio ./chart \
 helm history acmistio -n itcacm-citadel-system
 
 # Откатиться к предыдущей версии
-helm rollback acmistio -n itcacm-citadel-system
+# <REVISION> требуемая версия из истории
+# Предпросмотр отката без изменений:
+# helm rollback acmistio <REVISION> -n itcacm-citadel-system --dry-run
+helm rollback acmistio <REVISION> -n itcacm-citadel-system
 ```
 
 ### Как проверить журналы при ошибках
@@ -151,13 +154,13 @@ helm rollback acmistio -n itcacm-citadel-system
 При возникновении проблем выполните следующие команды:
 
 ```bash
-# Логи оператора
+# Журналы оператора
 kubectl logs -n itcacm-citadel-system deployment/acmistio-operator
 
-# События в namespace
+# События в пространстве имён
 kubectl get events -n itcacm-citadel-system --sort-by='.lastTimestamp'
 
-# Статус Helm релиза
+# Статус релиза Helm
 helm status acmistio -n itcacm-citadel-system
 ```
 
@@ -168,7 +171,7 @@ helm status acmistio -n itcacm-citadel-system
 ```bash
 helm upgrade acmistio ./chart \
   --namespace itcacm-citadel-system \
-  --set acm.caroot="$(cat ~/new_Root_CA.pem)" \
+  --set-file acm.caroot=~/Root_CA.pem \
   --reuse-values
 ```
 
